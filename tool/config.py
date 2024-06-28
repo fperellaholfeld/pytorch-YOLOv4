@@ -1,5 +1,5 @@
 import torch
-from tool.torch_utils import convert2cpu
+from tool.utils import convert2cpu
 
 
 def parse_cfg(cfgfile):
@@ -167,16 +167,6 @@ def print_cfg(blocks):
             from_id = int(block['from'])
             from_id = from_id if from_id > 0 else from_id + ind
             print('%5d %-6s %d' % (ind, 'shortcut', from_id))
-            prev_width = out_widths[from_id]
-            prev_height = out_heights[from_id]
-            prev_filters = out_filters[from_id]
-            out_widths.append(prev_width)
-            out_heights.append(prev_height)
-            out_filters.append(prev_filters)
-        elif block['type'] == 'sam':
-            from_id = int(block['from'])
-            from_id = from_id if from_id > 0 else from_id + ind
-            print('%5d %-6s %d' % (ind, 'sam', from_id))
             prev_width = out_widths[from_id]
             prev_height = out_heights[from_id]
             prev_filters = out_filters[from_id]

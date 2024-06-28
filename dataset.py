@@ -10,15 +10,14 @@
     @Detail    :
 
 '''
-import os
-import random
-import sys
-
-import cv2
-import numpy as np
-
-import torch
 from torch.utils.data.dataset import Dataset
+
+import random
+import cv2
+import sys
+import numpy as np
+import os
+import matplotlib.pyplot as plt
 
 
 def rand_uniform_strong(min, max):
@@ -136,7 +135,7 @@ def image_data_augmentation(mat, w, h, pleft, ptop, swidth, sheight, flip, dhue,
         # cv2.COLOR_BGR2HSV, cv2.COLOR_RGB2HSV, cv2.COLOR_HSV2BGR, cv2.COLOR_HSV2RGB
         if dsat != 1 or dexp != 1 or dhue != 0:
             if img.shape[2] >= 3:
-                hsv_src = cv2.cvtColor(sized.astype(np.float32), cv2.COLOR_RGB2HSV)  # RGB to HSV
+                hsv_src = cv2.cvtColor(sized.astype(float), cv2.COLOR_RGB2HSV)  # RGB to HSV
                 hsv = cv2.split(hsv_src)
                 hsv[1] *= dsat
                 hsv[2] *= dexp
@@ -240,7 +239,7 @@ def draw_box(img, bboxes):
 
 
 class Yolo_dataset(Dataset):
-    def __init__(self, label_path, cfg, train=True):
+    def __init__(self, lable_path, cfg):
         super(Yolo_dataset, self).__init__()
         if cfg.mixup == 2:
             print("cutmix=1 - isn't supported for Detector")
@@ -250,27 +249,23 @@ class Yolo_dataset(Dataset):
             raise
 
         self.cfg = cfg
-        self.train = train
 
         truth = {}
-        f = open(label_path, 'r', encoding='utf-8')
+        f = open(lable_path, 'r', encoding='utf-8')
         for line in f.readlines():
             data = line.split(" ")
             truth[data[0]] = []
             for i in data[1:]:
-                truth[data[0]].append([int(float(j)) for j in i.split(',')])
+                truth[data[0]].append([int(j) for j in i.split(',')])
 
         self.truth = truth
-        self.imgs = list(self.truth.keys())
 
     def __len__(self):
         return len(self.truth.keys())
 
     def __getitem__(self, index):
-        if not self.train:
-            return self._get_val_item(index)
-        img_path = self.imgs[index]
-        bboxes = np.array(self.truth.get(img_path), dtype=np.float)
+        img_path = list(self.truth.keys())[index]
+        bboxes = np.array(self.truth.get(img_path), dtype=float)
         img_path = os.path.join(self.cfg.dataset_dir, img_path)
         use_mixup = self.cfg.mixup
         if random.randint(0, 1):
@@ -291,14 +286,14 @@ class Yolo_dataset(Dataset):
         for i in range(use_mixup + 1):
             if i != 0:
                 img_path = random.choice(list(self.truth.keys()))
-                bboxes = np.array(self.truth.get(img_path), dtype=np.float)
+                bboxes = np.array(self.truth.get(img_path), dtype=float)
                 img_path = os.path.join(self.cfg.dataset_dir, img_path)
             img = cv2.imread(img_path)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             if img is None:
                 continue
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             oh, ow, oc = img.shape
-            dh, dw, dc = np.array(np.array([oh, ow, oc]) * self.cfg.jitter, dtype=np.int)
+            dh, dw, dc = np.array(np.array([oh, ow, oc]) * self.cfg.jitter, dtype=int)
 
             dhue = rand_uniform_strong(-self.cfg.hue, self.cfg.hue)
             dsat = rand_scale(self.cfg.saturation)
@@ -351,9 +346,9 @@ class Yolo_dataset(Dataset):
             if (min_w_h / 8) < blur and blur > 1:  # disable blur if one of the objects is too small
                 blur = min_w_h / 8
 
-            ai = image_data_augmentation(img, self.cfg.w, self.cfg.h, pleft, ptop, swidth, sheight, flip,
-                                         dhue, dsat, dexp, gaussian_noise, blur, truth)
-
+            # ai = image_data_augmentation(img, self.cfg.w, self.cfg.h, pleft, ptop, swidth, sheight, flip,
+            #                              dhue, dsat, dexp, gaussian_noise, blur, truth)
+            ai = img
             if use_mixup == 0:
                 out_img = ai
                 out_bboxes = truth
@@ -383,63 +378,16 @@ class Yolo_dataset(Dataset):
         if use_mixup == 3:
             out_bboxes = np.concatenate(out_bboxes, axis=0)
         out_bboxes1 = np.zeros([self.cfg.boxes, 5])
-        out_bboxes1[:min(out_bboxes.shape[0], self.cfg.boxes)] = out_bboxes[:min(out_bboxes.shape[0], self.cfg.boxes)]
+        try:
+            out_bboxes1[:min(out_bboxes.shape[0], self.cfg.boxes)] = out_bboxes[:min(out_bboxes.shape[0], self.cfg.boxes)]
+        except AttributeError:
+            out_bboxes = np.array(out_bboxes.astype(object), dtype=float)
+            out_bboxes1[:min(out_bboxes.shape[0], self.cfg.boxes)] = out_bboxes[:min(out_bboxes.shape[0], self.cfg.boxes)]
         return out_img, out_bboxes1
-
-    def _get_val_item(self, index):
-        """
-        """
-        img_path = self.imgs[index]
-        bboxes_with_cls_id = np.array(self.truth.get(img_path), dtype=np.float)
-        img = cv2.imread(os.path.join(self.cfg.dataset_dir, img_path))
-        # img_height, img_width = img.shape[:2]
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # img = cv2.resize(img, (self.cfg.w, self.cfg.h))
-        # img = torch.from_numpy(img.transpose(2, 0, 1)).float().div(255.0).unsqueeze(0)
-        num_objs = len(bboxes_with_cls_id)
-        target = {}
-        # boxes to coco format
-        boxes = bboxes_with_cls_id[...,:4]
-        boxes[..., 2:] = boxes[..., 2:] - boxes[..., :2]  # box width, box height
-        target['boxes'] = torch.as_tensor(boxes, dtype=torch.float32)
-        target['labels'] = torch.as_tensor(bboxes_with_cls_id[...,-1].flatten(), dtype=torch.int64)
-        target['image_id'] = torch.tensor([get_image_id(img_path)])
-        target['area'] = (target['boxes'][:,3])*(target['boxes'][:,2])
-        target['iscrowd'] = torch.zeros((num_objs,), dtype=torch.int64)
-        return img, target
-
-
-def get_image_id(filename:str) -> int:
-    """
-    Convert a string to a integer.
-    Make sure that the images and the `image_id`s are in one-one correspondence.
-    There are already `image_id`s in annotations of the COCO dataset,
-    in which case this function is unnecessary.
-    For creating one's own `get_image_id` function, one can refer to
-    https://github.com/google/automl/blob/master/efficientdet/dataset/create_pascal_tfrecord.py#L86
-    or refer to the following code (where the filenames are like 'level1_123.jpg')
-    >>> lv, no = os.path.splitext(os.path.basename(filename))[0].split("_")
-    >>> lv = lv.replace("level", "")
-    >>> no = f"{int(no):04d}"
-    >>> return int(lv+no)
-    """
-    # raise NotImplementedError("Create your own 'get_image_id' function")
-    # lv, no = os.path.splitext(os.path.basename(filename))[0].split("_")
-    # lv = lv.replace("level", "")
-    # no = f"{int(no):04d}"
-    # return int(lv+no)
-
-    print("You could also create your own 'get_image_id' function.")
-    # print(filename)
-    parts = filename.split('/')
-    id = int(parts[-1][0:-4])
-    # print(id)
-    return id
 
 
 if __name__ == "__main__":
     from cfg import Cfg
-    import matplotlib.pyplot as plt
 
     random.seed(2020)
     np.random.seed(2020)

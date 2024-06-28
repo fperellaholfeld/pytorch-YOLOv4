@@ -15,7 +15,6 @@ import cv2
 from tool.darknet2pytorch import Darknet
 import argparse
 from tool.utils import *
-from tool.torch_utils import *
 
 
 def arg_parse():

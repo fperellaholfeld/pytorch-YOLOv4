@@ -32,12 +32,12 @@ def demo_tensorflow(tfpb_file="./weight/yolov4.pb", image_path=None, print_senso
         out3 = persisted_sess.graph.get_tensor_by_name(graph_name + '/' + 'output_3:0')
         print(out1.shape, out2.shape, out3.shape)
 
-        # image_src = np.random.rand(1, 3, 608, 608).astype(np.float32)  # input image
+        # image_src = np.random.rand(1, 3, 608, 608).astype(float)  # input image
         # Input
         image_src = cv2.imread(image_path)
         resized = cv2.resize(image_src, (inp.shape[2], inp.shape[3]), interpolation=cv2.INTER_LINEAR)
         img_in = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        img_in = np.transpose(img_in, (2, 0, 1)).astype(np.float32)
+        img_in = np.transpose(img_in, (2, 0, 1)).astype(float)
         img_in = np.expand_dims(img_in, axis=0)
         img_in /= 255.0
         print("Shape of the network input: ", img_in.shape)

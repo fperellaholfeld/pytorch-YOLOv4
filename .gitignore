@@ -2,12 +2,6 @@ ttest
 *.weights
 *.pth
 *.onnx
-*.engine
-*.pyc
-*.infer
-*.npy
-
-z_demo_*
 
 __pycache__
 .idea
@@ -15,6 +9,5 @@ __pycache__
 runs
 log
 
-*.jpg
-*.json
-data/outcome
+predictions.jpg
+predictions_onnx.jpg
